@@ -30,6 +30,12 @@ Public Class MainForm
 
     Dim bStopApp As Boolean = False
 
+    '*****  This is for the columns in the spreadsheet that will track the results of each record  *****
+    Dim col_FINAL_OUTCOME As Integer = 27
+    Dim col_MESSAGE As Integer = 28
+    Dim col_SUBMITDATE As Integer = 29
+    Dim col_TAT As Integer = 30
+    '***************************************************************************************************
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
@@ -49,6 +55,8 @@ Public Class MainForm
                 Dim i As Integer
 
                 OpenRxClaimSession()    'Open an RxClaim session/window
+
+                Initialize_RxClaim_Screen()
 
                 For i = 2 To objWorksheet1Count      'Start i on 2 because that is the 1st row we can start with (row1 is the header)
 
@@ -90,6 +98,36 @@ Public Class MainForm
 
     End Sub
 
+    Public Sub Initialize_RxClaim_Screen()
+        'IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
+        If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
+            objRx.SendKeys("[Enter]")
+            waitOnMe(1000)
+        End If
+
+        'This will be the case if it is notifying you that you have x days until password expires
+        If Trim(objRx.GetText(21, 2, 11)) = "Press Enter" Then
+            objRx.SendKeys("[Enter]")
+            waitOnMe(1000)
+        End If
+
+        waitForMe()
+
+        'IsRightScreenName("RX6", 9, 45, 5000)      'this only works if every users has access to the exact same memu options
+        IsRightScreenName("Prime", 1, 33, 5000)
+
+        waitForMe()
+
+        If LCase(cmbEnv.SelectedItem) = "prod03" Then
+            objRx.SetText("PPF", 21, 7)
+        Else
+            objRx.SetText("RX6", 21, 7)
+        End If
+
+        waitForMe()
+        MoveMe("enter", 1)
+    End Sub
+
     Public Sub FindCAG(iRow As Integer)
         ''Find the right line of coverage (based on Fill Date (col 3))  ****************************************************************
         'Dim d As String = objWorksheet1.Cells(iRow, 3).Value
@@ -114,12 +152,6 @@ Public Class MainForm
                 'iRowCounter = (z + 9) + (z * 3)
                 iRowCounter = (z + 8) + (z * 3)
 
-                ''If we did not get anything returned from the query, then...
-                'If Len(sCarrier) = 0 Then
-                '    IsActiveEligFound = False
-                '    Exit For
-                'End If
-
                 If Trim(objRx.GetText(iRowCounter, 35, 10)) = sCarrier And Trim(objRx.GetText(iRowCounter, 46, 16)) = sAccount And Trim(objRx.GetText(iRowCounter, 63, 15)) = sGroup Then
                     IsActiveEligFound = True
 
@@ -143,34 +175,34 @@ Public Class MainForm
         Next
 
         If IsActiveEligFound = False Then      'Member by ID screen
-            objWorksheet1.Cells(iRow, 8).Value = "Error - Member by Id screen"
-            objWorksheet1.Cells(iRow, 9).Value = "Could not find Active Line of Coverage"
+            objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Value = "Error - Member by Id screen"
+            objWorksheet1.Cells(iRow, col_MESSAGE).Value = "Could not find Active Line of Coverage"
             Exit Sub
         End If
     End Sub
 
     Public Sub GetTo_JobScheduleList_Screen(iRow As Integer)
-        'IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
-        If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
-            objRx.SendKeys("[Enter]")
-            waitOnMe(1000)
-        End If
+        ''IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
+        'If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
+        '    objRx.SendKeys("[Enter]")
+        '    waitOnMe(1000)
+        'End If
 
-        'Now try connecting to that session ... we will wait 5 seconds
-        'This is a hard wait to ensure that the RxClaim session has started
-        IsRightScreenName("QPADEV", 1, 70, 5000)
+        ''Now try connecting to that session ... we will wait 5 seconds
+        ''This is a hard wait to ensure that the RxClaim session has started
+        'IsRightScreenName("QPADEV", 1, 70, 5000)
 
-        waitForMe()
+        'waitForMe()
 
-        If LCase(cmbEnv.SelectedItem) = "prod03" Then
-            objRx.SetText("PPF", 21, 7)
-        Else
-            objRx.SetText("RX6", 21, 7)
-        End If
+        'If LCase(cmbEnv.SelectedItem) = "prod03" Then
+        '    objRx.SetText("PPF", 21, 7)
+        'Else
+        '    objRx.SetText("RX6", 21, 7)
+        'End If
 
-        waitForMe()
-        MoveMe("enter", 1)
-        waitForMe()
+        'waitForMe()
+        'MoveMe("enter", 1)
+        'waitForMe()
 
         IsRightScreenName("CCT600", 1, 2, 5000)
         waitForMe()
