@@ -23,14 +23,27 @@ Public Class MainForm
 
     'Excel Object Variables
     Dim objExcelFilePath As String
-    Dim objExcel = CreateObject("Excel.Application")
+    '    Dim objExcel = CreateObject("Excel.Application")
+    Dim objExcel
     Dim objWorkbook1
     Dim objWorksheet1
     Dim objWorksheet1Count As Integer
 
-    Dim bStopApp As Boolean = False
+    Dim bStopApp As Boolean
 
     '*****  This is for the columns in the spreadsheet that will track the results of each record  *****
+    Dim colReceivedDate As Integer = 8
+    Dim colResidence As Integer = 18
+    Dim colProdID As Integer = 19       'NDC
+    Dim colDispQty As Integer = 20
+    Dim colDS As Integer = 21
+    Dim colWrittenDate As Integer = 17
+    Dim colTrackingNum As Integer = 10
+    Dim colDate As Integer = 8          'Received Date
+    Dim colPrescriberQual As Integer = 22
+    Dim colPrescriberID As Integer = 23
+    Dim colDue As Integer = 24          'Submitted Cost
+
     Dim col_FINAL_OUTCOME As Integer = 27
     Dim col_MESSAGE As Integer = 28
     Dim col_SUBMITDATE As Integer = 29
@@ -38,94 +51,273 @@ Public Class MainForm
     '***************************************************************************************************
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
+        'Once we click the start button...Get to the right screen
 
+        '1.  Type in RX6 [enter]        'RX6 or PPF
+        '   RxClaims Library
+        '2.  Type "3" [enter]           'Screen name should be:  CCT600 - RxCLAIM Plan Administrator Menu
+        '   Manual Claim
+        '3.  Type "2" [enter]           'Screen name should be:  CCT630S - RxCLAIM Manual Claim Menu
+        '   D0 Manual Claim
+        '4.  Type "2" [enter]           'Screen name should be:  CCT632 - RxCLAIM D0 Manual Claim Maintenance
+        '   Member Reimbursement
+
+
+        '*Column AC (Submit Date) is the date this app was run
+        '*Column AD (TAT) [turn around time] is column AC minus Received Date (col H)
+
+
+        'Get the User's Name
+        GetUsername()
     End Sub
 
     Private Sub btnStart_Click(sender As Object, e As EventArgs) Handles btnStart.Click
-        Me.Cursor = Cursors.WaitCursor
-        btnStart.Enabled = False
+        Try
+            Me.Cursor = Cursors.WaitCursor
+            btnStart.Enabled = False
 
-        'Username
-        GetUsername()
+            'Pre-set
+            bStopApp = False
 
-        Do While bStopApp = False
-            OpenSpreadsheetTemplate()
+            Do While bStopApp = False
+                OpenSpreadsheetTemplate()
 
-            If objWorksheet1Count > 1 Then
-                Dim i As Integer
+                If objWorksheet1Count > 1 Then
+                    Dim i As Integer
 
-                OpenRxClaimSession()    'Open an RxClaim session/window
+                    OpenRxClaimSession()    'Open an RxClaim session/window
 
-                Initialize_RxClaim_Screen()
-
-                For i = 2 To objWorksheet1Count      'Start i on 2 because that is the 1st row we can start with (row1 is the header)
+                    Initialize_RxClaim_Screen()
 
                     GoHome()        'will bring the RxClaim screen all the way back home
 
-                    GetTo_JobScheduleList_Screen(i)
+                    For i = 2 To objWorksheet1Count      'Start i on 2 because that is the 1st row we can start with (row1 is the header)
+                        GetTo_JobScheduleList_Screen(i)
 
-                    FindCAG(i)
-                Next
-            Else
-                MsgBox("Your spreadsheet was empty.")
+                        FindCAG(i)
 
-            End If
+                        EnterMemberReimbursement(i)
 
+                        GoHome()        'will bring the RxClaim screen all the way back home
+                    Next
+                Else
+                    MsgBox("Your spreadsheet was empty.")
+
+                End If
+
+                bStopApp = True
+            Loop
+
+            ' Auto-fit the column widths and row heights*******
+            Dim ObjRange
+            ObjRange = objWorksheet1.UsedRange
+            ObjRange.EntireColumn.Autofit()
+            '**************************************************
+
+            '*****  Close RxClaim session  **********************************************
+            objMgr2.StopConnection(ObjSessionHandle)
+            ''***************************************************************************
+
+            'Save Spreadsheet
+            'objExcel.ActiveWorkbook.SaveAs("C:\Users\Public\Reverse_Resubmit Reports\R_and_R_ " & var_TimeStamp & ".xlsx")
+            objExcel.DisplayAlerts = False
+
+            '****   Close Excel *********************************************************
+            objExcel.ActiveWorkbook.Close()
+            objExcel.Quit()
+
+            'Clean up
+            objExcel = Nothing
+            objWorkbook1 = Nothing
+            objWorksheet1 = Nothing
+            '****************************************************************************
+
+
+
+            '** It does NOT seem to be actually closing them out (when looking from the task manager)...I am not saving the spreadsheet at this time (maybe that could be the reason)
+
+
+
+            btnStart.Enabled = True
+            Me.Cursor = Cursors.Arrow
+
+        Catch ex As Exception
             bStopApp = True
-
-
-
-
-
-
-            'Get to the right screen
-
-
-            '1.  Type in RX6 [enter]        'RX6 or PPF
-            '   RxClaims Library
-            '2.  Type "3" [enter]           'Screen name should be:  CCT600 - RxCLAIM Plan Administrator Menu
-            '   Manual Claim
-            '3.  Type "2" [enter]           'Screen name should be:  CCT630S - RxCLAIM Manual Claim Menu
-            '   D0 Manual Claim
-            '4.  Type "2" [enter]           'Screen name should be:  CCT632 - RxCLAIM D0 Manual Claim Maintenance
-            '   Member Reimbursement
-
-
-        Loop
-
-        btnStart.Enabled = True
-        Me.Cursor = Cursors.Arrow
-
+            MsgBox("Experienced an exception on btnStart_Click():  " & ex.ToString)
+        End Try
     End Sub
 
     Public Sub Initialize_RxClaim_Screen()
-        'IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
-        If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
-            objRx.SendKeys("[Enter]")
-            waitOnMe(1000)
-        End If
+        Try
+            'IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
+            If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
+                objRx.SendKeys("[Enter]")
+                waitOnMe(1000)
+            End If
 
-        'This will be the case if it is notifying you that you have x days until password expires
-        If Trim(objRx.GetText(21, 2, 11)) = "Press Enter" Then
-            objRx.SendKeys("[Enter]")
-            waitOnMe(1000)
-        End If
+            'This will be the case if it is notifying you that you have x days until password expires
+            If Trim(objRx.GetText(21, 2, 11)) = "Press Enter" Then
+                objRx.SendKeys("[Enter]")
+                waitOnMe(1000)
+            End If
 
-        waitForMe()
+            waitForMe()
 
-        'IsRightScreenName("RX6", 9, 45, 5000)      'this only works if every users has access to the exact same memu options
-        IsRightScreenName("Prime", 1, 33, 5000)
+            'IsRightScreenName("RX6", 9, 45, 5000)      'this only works if every users has access to the exact same memu options
+            IsRightScreenName("Prime", 1, 33, 5000)
 
-        waitForMe()
+            waitForMe()
 
-        If LCase(cmbEnv.SelectedItem) = "prod03" Then
-            objRx.SetText("PPF", 21, 7)
-        Else
-            objRx.SetText("RX6", 21, 7)
-        End If
+            If LCase(cmbEnv.SelectedItem) = "prod03" Then
+                objRx.SetText("PPF", 21, 7)
+            Else
+                objRx.SetText("RX6", 21, 7)
+            End If
 
-        waitForMe()
-        MoveMe("enter", 1)
+            waitForMe()
+            MoveMe("enter", 1)
+        Catch ex As Exception
+            bStopApp = True
+            MsgBox("Experienced an exception on Initialize_RxClaim_Screen():  " & ex.ToString)
+        End Try
+    End Sub
+
+    Public Sub EnterMemberReimbursement(iRow As Integer)
+        Try
+            'Now try connecting to that session ... we will wait 5 seconds
+            'This is a hard wait to ensure that the RxClaim session has started
+            IsRightScreenName("RCNCP056BD", 1, 2, 5000)
+
+            waitForMe()
+
+            'Start entering info from spreadsheet
+
+            If Trim(objWorksheet1.Cells(iRow, colProdID).Value) = 0 Then
+                objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Value = "Compound Claim"
+                objWorksheet1.Cells(iRow, col_MESSAGE).Value = "Requires manual resubmission"
+            Else
+                Dim sPreFillDate, sPostFillDate As String         'used to convert yyyymmdd to mmddyy
+
+                'Residence
+                SettingText(Trim(objWorksheet1.Cells(iRow, colResidence).Value), 7, 68)   'Text, row, col
+
+
+                'Prod ID
+                SettingText(Trim(objWorksheet1.Cells(iRow, colProdID).Value), 11, 20)   'Text, row, col
+
+
+                'Disp Qty
+                SettingText(Trim(objWorksheet1.Cells(iRow, colDispQty).Value), 12, 11)   'Text, row, col
+
+                'DS
+                SettingText(Trim(objWorksheet1.Cells(iRow, colDS).Value), 12, 26)   'Text, row, col
+
+
+                'Cmpnd      --This field will "Always" be '1'
+                SettingText("1", 14, 14)   'Text, row, col
+
+
+                'Written Date (10 characters)
+                sPreFillDate = Trim(objWorksheet1.Cells(iRow, colWrittenDate).Value)
+
+                If Len(sPreFillDate) = 8 Then
+                    '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
+                    sPostFillDate = Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 3, 2)
+
+                    If IsDate(sPostFillDate) Then
+                        SettingText(sPostFillDate, 13, 10)   'Text, row, col
+                    Else
+                        MsgBox("Sorry..." & sPostFillDate & " is NOT a date.")
+                    End If
+                End If
+
+                'Tracking #
+                SettingText(Trim(objWorksheet1.Cells(iRow, colTrackingNum).Value), 16, 13)   'Text, row, col
+
+                'Date (8 characters)
+                sPreFillDate = Trim(objWorksheet1.Cells(iRow, colDate).Value)
+
+                If Len(sPreFillDate) = 8 Then
+                    '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
+                    sPostFillDate = Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 3, 2)
+
+                    If IsDate(sPostFillDate) Then
+                        SettingText(sPostFillDate, 16, 33)   'Text, row, col
+                    Else
+                        MsgBox("Sorry..." & sPostFillDate & " is NOT a date.")
+                    End If
+                End If
+
+                'Prescriber Qual
+                SettingText(Trim(objWorksheet1.Cells(iRow, colPrescriberQual).Value), 18, 19)   'Text, row, col
+
+                'Prescriber ID
+                SettingText(Trim(objWorksheet1.Cells(iRow, colPrescriberID).Value), 18, 26)   'Text, row, col
+
+                'Due
+                SettingText(Trim(objWorksheet1.Cells(iRow, colDue).Value), 10, 47)   'Text, row, col
+
+                MoveMe("pf18", 1)
+
+                waitForMe()
+
+                'If we get moved to a "Reject Reimbursement Code" screen...just F12 to get back
+                If Trim(objRx.GetText(1, 2, 8)) = "RCEBD003" Then
+                    MoveMe("pf12", 1)
+                End If
+
+                waitForMe()
+
+                'Scrape Results
+                Dim sSts As String = Trim(objRx.GetText(21, 6, 1))
+                Dim sRej As String = Trim(objRx.GetText(21, 12, 30))
+
+                If Len(sRej) > 0 Then sSts = sSts & " - " & sRej
+
+                '  1. Status
+                objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Value = sSts
+                '  2.  Message
+                objWorksheet1.Cells(iRow, col_MESSAGE).Value = Trim(objRx.GetText(22, 6, 35))
+
+                If Microsoft.VisualBasic.Left(sSts, 1) = "R" Then
+                    'color yellow
+                    objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Interior.Color = Color.Yellow
+
+                    If sRej = "75" Then
+                        'color red
+                        objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Interior.Color = Color.Red
+                    End If
+                End If
+
+                'SubmitDate
+                objWorksheet1.Cells(iRow, col_SUBMITDATE).Value = Now.Date
+
+                'Get the Received Date to calculate TAT (turn around time)********************************************************************************
+
+                sPreFillDate = Trim(objWorksheet1.Cells(iRow, colReceivedDate).Value)
+
+                If Len(sPreFillDate) = 8 Then
+                    '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
+                    sPostFillDate = Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 3, 2)
+
+                    If IsDate(sPostFillDate) Then
+                        'objWorksheet1.Cells(iRow, col_TAT).Value = CDate(objWorksheet1.Cells(iRow, col_SUBMITDATE).Value) - CDate(sPostFillDate)
+                        objWorksheet1.Cells(iRow, col_TAT).Value = DateDiff(DateInterval.Day, CDate(sPostFillDate), CDate(objWorksheet1.Cells(iRow, col_SUBMITDATE).Value))
+                    Else
+                        objWorksheet1.Cells(iRow, col_TAT).Value = "Received Date is not a valid date"
+                    End If
+                Else
+                    objWorksheet1.Cells(iRow, col_TAT).Value = "Received Date is not a valid date"
+                End If
+
+                '*****************************************************************************************************************************************
+
+            End If
+
+        Catch ex As Exception
+            bStopApp = True
+            MsgBox("Experienced an exception on EnterMemberReimbursement():  " & ex.ToString)
+        End Try
     End Sub
 
     Public Sub FindCAG(iRow As Integer)
@@ -134,142 +326,150 @@ Public Class MainForm
         'Dim sFillDate As String = d.Substring(0, 2) & "/" & d.Substring(2, 2) & "/" & d.Substring(4, 4)
         'Dim dFillDate As Date = CDate(sFillDate)
 
-        Dim sCarrier, sAccount, sGroup As String
+        Try
+            Dim sCarrier, sAccount, sGroup As String
 
-        sCarrier = Trim(objWorksheet1.Cells(iRow, 3).Value)
-        sAccount = Trim(objWorksheet1.Cells(iRow, 4).Value)
-        sGroup = Trim(objWorksheet1.Cells(iRow, 5).Value)
+            sCarrier = Trim(objWorksheet1.Cells(iRow, 3).Value)
+            sAccount = Trim(objWorksheet1.Cells(iRow, 4).Value)
+            sGroup = Trim(objWorksheet1.Cells(iRow, 5).Value)
 
+            Dim iRowCounter As Integer
+            Dim IsActiveEligFound As Boolean = False
 
-        Dim iRowCounter As Integer
-        Dim IsActiveEligFound As Boolean = False
+            'rows 9, 13, 17, 21
 
-        'rows 9, 13, 17, 21
+            For y As Integer = 1 To 4               'This will allow us to page down up to 4 times
+                For z As Integer = 0 To 3           'This will allow us to look at up to 4 records per page
 
-        For y As Integer = 1 To 4               'This will allow us to page down up to 4 times
-            For z As Integer = 0 To 3           'This will allow us to look at up to 4 records per page
+                    'iRowCounter = (z + 9) + (z * 3)
+                    iRowCounter = (z + 8) + (z * 3)
 
-                'iRowCounter = (z + 9) + (z * 3)
-                iRowCounter = (z + 8) + (z * 3)
+                    If Trim(objRx.GetText(iRowCounter, 35, 10)) = sCarrier And Trim(objRx.GetText(iRowCounter, 46, 16)) = sAccount And Trim(objRx.GetText(iRowCounter, 63, 15)) = sGroup Then
+                        IsActiveEligFound = True
 
-                If Trim(objRx.GetText(iRowCounter, 35, 10)) = sCarrier And Trim(objRx.GetText(iRowCounter, 46, 16)) = sAccount And Trim(objRx.GetText(iRowCounter, 63, 15)) = sGroup Then
-                    IsActiveEligFound = True
+                        'Chose this one by entering a "1"
+                        SettingText("1", iRowCounter, 2)   'Text, row, col
 
-                    'Chose this one by entering a "1"
-                    SettingText("1", iRowCounter, 2)   'Text, row, col
+                        objRx.SendKeys("[Enter]")
+                        waitForMe()
+                        objRx.SendKeys("[Enter]")
+                        waitForMe()
 
-                    objRx.SendKeys("[Enter]")
+                        'Type "Y" and then [Enter]
+                        TypeMe("Y")
+                        waitForMe()
+                        objRx.SendKeys("[Enter]")
 
-                    waitForMe()
+                        waitForMe()
+                        Exit For
+                    End If
+                Next
+
+                If IsActiveEligFound = True Then
                     Exit For
+                Else
+                    'pagedown
+                    MoveMe("roll up", 1)
+                    waitForMe()
                 End If
             Next
 
-            If IsActiveEligFound = True Then
-                Exit For
-            Else
-                'pagedown
-                MoveMe("roll up", 1)
-                waitForMe()
+            If IsActiveEligFound = False Then      'Member by ID screen
+                objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Value = "Error - Member by Id screen"
+                objWorksheet1.Cells(iRow, col_MESSAGE).Value = "Could not find Active Line of Coverage"
+                Exit Sub
             End If
-        Next
-
-        If IsActiveEligFound = False Then      'Member by ID screen
-            objWorksheet1.Cells(iRow, col_FINAL_OUTCOME).Value = "Error - Member by Id screen"
-            objWorksheet1.Cells(iRow, col_MESSAGE).Value = "Could not find Active Line of Coverage"
-            Exit Sub
-        End If
+        Catch ex As Exception
+            bStopApp = True
+            MsgBox("Experienced an exception on FindCAG():  " & ex.ToString)
+        End Try
     End Sub
 
     Public Sub GetTo_JobScheduleList_Screen(iRow As Integer)
-        ''IF 19,2 for 11 = "Press Enter"  ...  This is usually the 1st screen that shows if you already have another session open
-        'If Trim(objRx.GetText(19, 2, 11)) = "Press Enter" Then
-        '    objRx.SendKeys("[Enter]")
-        '    waitOnMe(1000)
-        'End If
+        Try
+            IsRightScreenName("CCT600", 1, 2, 5000)
+            waitForMe()
+            objRx.SetText("3", 21, 7)
+            waitForMe()
+            MoveMe("enter", 1)
+            waitForMe()
 
-        ''Now try connecting to that session ... we will wait 5 seconds
-        ''This is a hard wait to ensure that the RxClaim session has started
-        'IsRightScreenName("QPADEV", 1, 70, 5000)
+            IsRightScreenName("CCT630S", 1, 2, 5000)
+            waitForMe()
+            objRx.SetText("2", 21, 7)
+            waitForMe()
+            MoveMe("enter", 1)
+            waitForMe()
 
-        'waitForMe()
+            IsRightScreenName("CCT632", 1, 2, 5000)
+            waitForMe()
+            objRx.SetText("2", 21, 7)
+            waitForMe()
+            MoveMe("enter", 1)
+            waitForMe()
 
-        'If LCase(cmbEnv.SelectedItem) = "prod03" Then
-        '    objRx.SetText("PPF", 21, 7)
-        'Else
-        '    objRx.SetText("RX6", 21, 7)
-        'End If
+            IsRightScreenName("RCNCP050D", 1, 2, 5000)
+            waitForMe()
 
-        'waitForMe()
-        'MoveMe("enter", 1)
-        'waitForMe()
+            'press f6
+            MoveMe("pf6", 1)
+            waitForMe()
 
-        IsRightScreenName("CCT600", 1, 2, 5000)
-        waitForMe()
-        objRx.SetText("3", 21, 7)
-        waitForMe()
-        MoveMe("enter", 1)
-        waitForMe()
+            IsRightScreenName("RCNCP056", 1, 2, 60000)
 
-        IsRightScreenName("CCT630S", 1, 2, 5000)
-        waitForMe()
-        objRx.SetText("2", 21, 7)
-        waitForMe()
-        MoveMe("enter", 1)
-        waitForMe()
-
-        IsRightScreenName("CCT632", 1, 2, 5000)
-        waitForMe()
-        objRx.SetText("2", 21, 7)
-        waitForMe()
-        MoveMe("enter", 1)
-        waitForMe()
-
-        IsRightScreenName("RCNCP050D", 1, 2, 5000)
-        waitForMe()
-
-        'press f6
-        MoveMe("pf6", 1)
-        waitForMe()
-
-        IsRightScreenName("RCNCP056", 1, 2, 60000)
-
-        'BIN
-        MoveMe2("eraseeof", 4, 11)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 11).Value), 4, 11)   'Text, row, col
+            'BIN
+            MoveMe2("eraseeof", 4, 11)
+            SettingText(Trim(objWorksheet1.Cells(iRow, 11).Value), 4, 11)   'Text, row, col
 
 
-        'Proc Ctrl
-        MoveMe2("eraseeof", 4, 38)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 12).Value), 4, 38)   'Text, row, col
+            'Proc Ctrl
+            MoveMe2("eraseeof", 4, 38)
+            SettingText(Trim(objWorksheet1.Cells(iRow, 12).Value), 4, 38)   'Text, row, col
 
-        'Group
-        MoveMe2("eraseeof", 4, 58)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 13).Value), 4, 58)   'Text, row, col
+            'Group
+            MoveMe2("eraseeof", 4, 58)
+            SettingText(Trim(objWorksheet1.Cells(iRow, 13).Value), 4, 58)   'Text, row, col
 
-        '**************************************************************************************************************
+            '**************************************************************************************************************
 
-        'RX #
-        MoveMe2("eraseeof", 5, 38)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 15).Value), 5, 38)   'Text, row, col
+            'RX #
+            MoveMe2("eraseeof", 5, 38)
+            SettingText(Trim(objWorksheet1.Cells(iRow, 15).Value), 5, 38)   'Text, row, col
 
-        'Fill Date
-        MoveMe2("eraseeof", 7, 11)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 17).Value), 7, 11)   'Text, row, col              '*Spreadsheet will be in this format "yyymmdd"...But needs to be in this format: "mmddyy"
+            'Fill Date
 
-        'MemberId
-        MoveMe2("eraseeof", 7, 38)
-        SettingText(Trim(objWorksheet1.Cells(iRow, 7).Value), 7, 38)   'Text, row, col
+            Dim sPreFillDate, sPostFillDate As String
+            sPreFillDate = Trim(objWorksheet1.Cells(iRow, 17).Value)
 
-        objRx.SendKeys("[Enter]")
+            If Len(sPreFillDate) = 8 Then
+                '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
+                sPostFillDate = Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 3, 2)
 
-        waitForMe()
+                If IsDate(sPostFillDate) Then
+                    MoveMe2("eraseeof", 7, 11)
+                    SettingText(sPostFillDate, 7, 11)   'Text, row, col              
+                Else
+                    MsgBox("Sorry..." & sPostFillDate & " is NOT a date.")
+                End If
+            End If
 
+            'MemberId
+            MoveMe2("eraseeof", 7, 38)
+            SettingText(Trim(objWorksheet1.Cells(iRow, 7).Value), 7, 38)   'Text, row, col
 
+            objRx.SendKeys("[Enter]")
+
+            waitForMe()
+        Catch ex As Exception
+            bStopApp = True
+            MsgBox("Experienced an exception on GetTo_JobScheduleList_Screen():  " & ex.ToString)
+        End Try
     End Sub
 
     Public Sub OpenSpreadsheetTemplate()
         Try
+            objExcel = CreateObject("Excel.Application")
+
             objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
 
             'objExcelFilePath = "J:\shrproj\Benefit Operations\Paper Claims\Claims Processing\Eligibility Rejects Macro\Stage Two - Eligibility Rejects Output File.xlsx"
@@ -288,6 +488,7 @@ Public Class MainForm
             objExcel.Visible = True     '--only do this if you want to see the progress
 
         Catch ex As Exception
+            bStopApp = True
             MsgBox("Experienced an exception on OpenSpreadsheetTemplate():  " & ex.ToString)
         End Try
     End Sub
@@ -360,10 +561,10 @@ Public Class MainForm
                 Exit Sub
             End If
         Catch ex As Exception
+            bStopApp = True
             MsgBox("Experienced an exception on OpenNewSession():  " & ex.ToString)
         End Try
     End Sub
-
 
 
     Sub MoveMe(command, amount)
