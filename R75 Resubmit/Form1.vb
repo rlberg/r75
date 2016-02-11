@@ -78,66 +78,113 @@ Public Class MainForm
 
             'Pre-set
             bStopApp = False
+            lblStatus.Text = ""
 
-            Do While bStopApp = False
-                OpenSpreadsheetTemplate()
+            'objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
 
-                If objWorksheet1Count > 1 Then
-                    Dim i As Integer
 
-                    OpenRxClaimSession()    'Open an RxClaim session/window
 
-                    Initialize_RxClaim_Screen()
+            'The following lines and For Loop will allow us to process all the Excel files in the Folder provided (strPath)
+            Dim strPath As String = "C:\Users\rlberg\Desktop\R75 Dropbox"
+            Dim objFso = CreateObject("Scripting.FileSystemObject")
+            Dim objFolder = objFso.GetFolder(strPath)
 
-                    GoHome()        'will bring the RxClaim screen all the way back home
 
-                    For i = 2 To objWorksheet1Count      'Start i on 2 because that is the 1st row we can start with (row1 is the header)
-                        GetTo_JobScheduleList_Screen(i)
 
-                        FindCAG(i)
 
-                        EnterMemberReimbursement(i)
+            OpenRxClaimSession()    'Open an RxClaim session/window
+            Initialize_RxClaim_Screen()
 
-                        GoHome()        'will bring the RxClaim screen all the way back home
-                    Next
-                Else
-                    MsgBox("Your spreadsheet was empty.")
+
+            Dim iFileCnt As Integer = 0
+
+
+            For Each objFile In objFolder.Files
+                If objFso.GetExtensionName(objFile.Path) = "xls" Or objFso.GetExtensionName(objFile.Path) = "xlsx" Then
+                    iFileCnt = iFileCnt + 1
+
+                    objExcel = CreateObject("Excel.Application")
+                    objWorkbook1 = objExcel.Workbooks.Open(objFile.Path)
+                    objWorksheet1 = objWorkbook1.Worksheets(1)
+
+                    objWorksheet1Count = objWorksheet1.Range("A1").CurrentRegion.Rows.Count()        'Claim Count
+
+                    objExcel.Visible = True     '--only do this if you want to see the progress
+
+                    'Now that we have our spreadsheet...lets get moving.
+
+                    'This Do-While loop will walk us thru row by row in the spreadsheet we are using until there are no more records
+                    Do While bStopApp = False
+                        'OpenSpreadsheetTemplate()
+
+                        If objWorksheet1Count > 1 Then
+                            Dim i As Integer
+
+                            'OpenRxClaimSession()    'Open an RxClaim session/window
+
+                            'Initialize_RxClaim_Screen()
+
+                            GoHome()        'will bring the RxClaim screen all the way back home
+
+                            For i = 2 To objWorksheet1Count      'Start i on 2 because that is the 1st row we can start with (row1 is the header)
+                                GetTo_JobScheduleList_Screen(i)
+
+                                FindCAG(i)
+
+                                EnterMemberReimbursement(i)
+
+                                GoHome()        'will bring the RxClaim screen all the way back home
+                            Next
+                        Else
+                            MsgBox("Your spreadsheet was empty.")
+
+                        End If
+
+                        bStopApp = True
+                    Loop
+
+                    ' Auto-fit the column widths and row heights*******
+                    Dim ObjRange
+                    ObjRange = objWorksheet1.UsedRange
+                    ObjRange.EntireColumn.Autofit()
+                    '**************************************************
+
+
+
+                    'Save Spreadsheet
+                    Dim var_TimeStamp As String
+                    var_TimeStamp = Replace(Now, "/", "-")
+                    var_TimeStamp = Replace(var_TimeStamp, ":", "-")
+
+                    objExcel.ActiveWorkbook.SaveAs("C:\Users\rlberg\Desktop\R75 Final\R75_ " & var_TimeStamp & ".xlsx")
+
+                    'Now that we have saved the file...delete the original file
+                    My.Computer.FileSystem.DeleteFile(objFile.Path)
+
+
+                    '****   Close Excel **************************************************************************************
+                    objExcel.DisplayAlerts = False
+                    objExcel.ActiveWorkbook.Close()
+                    objExcel.Quit()
+
+                    'Clean up
+                    objExcel = Nothing
+                    objWorkbook1 = Nothing
+                    objWorksheet1 = Nothing
+
+                    '** It does NOT seem to be actually closing the Excel instances (when looking from the task manager)
+                    'Now that I am saving the spreadsheet and once I close the vb app...then it clears the Excel instances.
+
+                    '*********************************************************************************************************
 
                 End If
-
-                bStopApp = True
-            Loop
-
-            ' Auto-fit the column widths and row heights*******
-            Dim ObjRange
-            ObjRange = objWorksheet1.UsedRange
-            ObjRange.EntireColumn.Autofit()
-            '**************************************************
+            Next
 
             '*****  Close RxClaim session  **********************************************
             objMgr2.StopConnection(ObjSessionHandle)
             ''***************************************************************************
 
-            'Save Spreadsheet
-            'objExcel.ActiveWorkbook.SaveAs("C:\Users\Public\Reverse_Resubmit Reports\R_and_R_ " & var_TimeStamp & ".xlsx")
-            objExcel.DisplayAlerts = False
-
-            '****   Close Excel *********************************************************
-            objExcel.ActiveWorkbook.Close()
-            objExcel.Quit()
-
-            'Clean up
-            objExcel = Nothing
-            objWorkbook1 = Nothing
-            objWorksheet1 = Nothing
-            '****************************************************************************
-
-
-
-            '** It does NOT seem to be actually closing them out (when looking from the task manager)...I am not saving the spreadsheet at this time (maybe that could be the reason)
-
-
-
+            lblStatus.Text = iFileCnt & " Files were processed."
             btnStart.Enabled = True
             Me.Cursor = Cursors.Arrow
 

@@ -24,6 +24,7 @@ Partial Class MainForm
     Private Sub InitializeComponent()
         Me.btnStart = New System.Windows.Forms.Button()
         Me.cmbEnv = New System.Windows.Forms.ComboBox()
+        Me.lblStatus = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'btnStart
@@ -44,19 +45,30 @@ Partial Class MainForm
         Me.cmbEnv.Size = New System.Drawing.Size(161, 21)
         Me.cmbEnv.TabIndex = 1
         '
+        'lblStatus
+        '
+        Me.lblStatus.AutoSize = True
+        Me.lblStatus.Location = New System.Drawing.Point(47, 92)
+        Me.lblStatus.Name = "lblStatus"
+        Me.lblStatus.Size = New System.Drawing.Size(0, 13)
+        Me.lblStatus.TabIndex = 2
+        '
         'MainForm
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(6.0!, 13.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(340, 92)
+        Me.ClientSize = New System.Drawing.Size(340, 134)
+        Me.Controls.Add(Me.lblStatus)
         Me.Controls.Add(Me.cmbEnv)
         Me.Controls.Add(Me.btnStart)
         Me.Name = "MainForm"
         Me.Text = "R75 Resubmit"
         Me.ResumeLayout(False)
+        Me.PerformLayout()
 
     End Sub
     Friend WithEvents btnStart As System.Windows.Forms.Button
     Friend WithEvents cmbEnv As System.Windows.Forms.ComboBox
+    Friend WithEvents lblStatus As System.Windows.Forms.Label
 
 End Class
