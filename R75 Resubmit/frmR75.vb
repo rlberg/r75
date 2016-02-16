@@ -37,6 +37,8 @@ Public Class MainForm
 
     Dim bStopApp As Boolean
 
+    Dim sDeploymentEnv As String = ""
+
     '*****  This is for the columns in the spreadsheet that will track the results of each record  *****
     Dim colReceivedDate As Integer = 8
     Dim colResidence As Integer = 18
@@ -80,7 +82,7 @@ Public Class MainForm
     Private Sub btnStart_Click(sender As Object, e As EventArgs) Handles btnStart.Click
         Try
             '1st check that an Environment was selected
-            If cmbEnv.SelectedIndex = -1 Then
+            If cmbRxClaimEnv.SelectedIndex = -1 Then
                 MsgBox("Please select an 'Envirionment' from the dropdown and try again.")
                 Exit Sub
             End If
@@ -92,48 +94,23 @@ Public Class MainForm
             bStopApp = False
             lblStatus.Text = ""
 
-
-
-
-
-
-
-            '***  Usage Tracking  **********************************************************************************************************
-
-            'J:\Department\Business Services and Intelligence\Open\BOTS Automation_Tools\BOTSApplication\Files\DB       'Here is the location of the DB
-            ''ProjectNo is 11
-
-            ''ToolNo
-            ''
-
-            '*******************************************************************************************************************************
-
-
-
-
-
-
-
-
-
-
-
-
-
-            'objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
-
-
-
-            'The following lines and For Loop will allow us to process all the Excel files in the Folder provided (strPath)
-            Dim strPath As String = "C:\Users\rlberg\Desktop\R75 Dropbox"
-            Dim objFso = CreateObject("Scripting.FileSystemObject")
-            Dim objFolder = objFso.GetFolder(strPath)
-
-
-
-
             OpenRxClaimSession()    'Open an RxClaim session/window
             Initialize_RxClaim_Screen()
+
+            '*** Where to look for spreadsheet(s) ******************************************************************************
+            Dim strPath As String
+
+            If LCase(sDeploymentEnv) = "test" Then
+                strPath = "C:\Users\rlberg\Desktop\R75 Dropbox"
+            ElseIf LCase(sDeploymentEnv) = "live" Then
+                strPath = "C:\Users\rlberg\Desktop\R75 Dropbox"
+            End If
+
+            'The following lines and For Loop will allow us to process all the Excel files in the Folder provided (strPath)
+            'Dim strPath As String = "C:\Users\rlberg\Desktop\R75 Dropbox"
+            Dim objFso = CreateObject("Scripting.FileSystemObject")
+            Dim objFolder = objFso.GetFolder(strPath)
+            '*** End of Where to look for spreadsheet(s) ***********************************************************************
 
             Dim iFileCnt As Integer = 0
 
@@ -198,11 +175,17 @@ Public Class MainForm
                     var_TimeStamp = Replace(Now, "/", "-")
                     var_TimeStamp = Replace(var_TimeStamp, ":", "-")
 
-                    objExcel.ActiveWorkbook.SaveAs("C:\Users\rlberg\Desktop\R75 Final\R75_ " & var_TimeStamp & ".xlsx")
+                    'objExcel.ActiveWorkbook.SaveAs("C:\Users\rlberg\Desktop\R75 Final\R75_ " & var_TimeStamp & ".xlsx")
+                    'strPath = "C:\Users\rlberg\Desktop\R75 Dropbox"
+
+                    If LCase(sDeploymentEnv) = "test" Then
+                        objExcel.ActiveWorkbook.SaveAs("J:\Department\Comm Paper Claims Clinical Review\test\Complete\R75_ " & var_TimeStamp & ".xlsx")
+                    ElseIf LCase(sDeploymentEnv) = "live" Then
+                        objExcel.ActiveWorkbook.SaveAs("J:\Department\Comm Paper Claims Clinical Review\Complete\R75_ " & var_TimeStamp & ".xlsx")
+                    End If
 
                     'Now that we have saved the file...delete the original file
                     My.Computer.FileSystem.DeleteFile(objFile.Path)
-
 
                     '****   Close Excel **************************************************************************************
                     objExcel.DisplayAlerts = False
@@ -218,9 +201,11 @@ Public Class MainForm
                     'Now that I am saving the spreadsheet and once I close the vb app...then it clears the Excel instances.
 
                     'Track Usage***************************************************************************************
-                    Dim appFun As New classlibrary.AppFunctions        'this is a class within the Class Library DLL
+                    Dim appFun As New ClassLibrary.AppFunctions        'this is a class within the Class Library DLL
 
                     appFun.TrackUse(3, usrNm, dStartDate, Now, objWorksheet1Count - 1)      '3 is the ProjNo for this Project
+
+                    'J:\Department\Business Services and Intelligence\Open\BOTS Automation_Tools\BOTSApplication\Files\DB       'Here is the location of the DB
                     '* End of Track Usage *****************************************************************************
 
                     '*********************************************************************************************************
@@ -275,7 +260,7 @@ Public Class MainForm
 
             waitForMe()
 
-            If LCase(cmbEnv.SelectedItem) = "prod03" Then
+            If LCase(cmbRxClaimEnv.SelectedItem) = "prod03" Then
                 objRx.SetText("PPF", 21, 7)
             Else
                 objRx.SetText("RX6", 21, 7)
@@ -654,20 +639,22 @@ Public Class MainForm
 
         Try
             'Now find the "File name" to open up based on their selection
-            If LCase(cmbEnv.SelectedItem) = "dev01" Then
+            If LCase(cmbRxClaimEnv.SelectedItem) = "dev01" Then
                 Envir = "Dev01.AS4"
-            ElseIf LCase(cmbEnv.SelectedItem) = "dev02" Then
+                sDeploymentEnv = "test"
+            ElseIf LCase(cmbRxClaimEnv.SelectedItem) = "dev02" Then
                 Envir = "Dev02.AS4"
-            ElseIf LCase(cmbEnv.SelectedItem) = "prod03" Then
+                sDeploymentEnv = "test"
+            ElseIf LCase(cmbRxClaimEnv.SelectedItem) = "prod03" Then
                 Envir = "PROD03.AS4"
-            ElseIf LCase(cmbEnv.SelectedItem) = "prod01" Then
+                sDeploymentEnv = "test"
+            ElseIf LCase(cmbRxClaimEnv.SelectedItem) = "prod01" Then
                 Envir = "PROD01.AS4"
+                sDeploymentEnv = "live"
             Else
                 MsgBox("Environment was not found ... exiting.")
                 Exit Sub
             End If
-
-
             '***********************************************
 
             Dim sDir As String = getMyDocs()
