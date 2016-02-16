@@ -33,7 +33,7 @@ Partial Class MainForm
         Me.btnStart.Name = "btnStart"
         Me.btnStart.Size = New System.Drawing.Size(109, 23)
         Me.btnStart.TabIndex = 0
-        Me.btnStart.Text = "Start Reprocessing"
+        Me.btnStart.Text = "Start Resubmitting"
         Me.btnStart.UseVisualStyleBackColor = True
         '
         'cmbEnv

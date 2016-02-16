@@ -7,7 +7,13 @@ Imports System.Net.Mail
 Imports bgw = System.ComponentModel
 Imports pcom = AutPSTypeLibrary
 
+Imports ClassLibrary
+
 Public Class MainForm
+
+    Public Const iTimeOut As Integer = 50000     'We are going to wait up to this much
+    'WaitForAppAvailable(iTimeOut)
+    'WaitForInputReady(iTimeOut)
 
     Dim OpenFileLocation As String
     Dim SavetoLocation As String
@@ -73,12 +79,46 @@ Public Class MainForm
 
     Private Sub btnStart_Click(sender As Object, e As EventArgs) Handles btnStart.Click
         Try
+            '1st check that an Environment was selected
+            If cmbEnv.SelectedIndex = -1 Then
+                MsgBox("Please select an 'Envirionment' from the dropdown and try again.")
+                Exit Sub
+            End If
+
             Me.Cursor = Cursors.WaitCursor
             btnStart.Enabled = False
 
             'Pre-set
             bStopApp = False
             lblStatus.Text = ""
+
+
+
+
+
+
+
+            '***  Usage Tracking  **********************************************************************************************************
+
+            'J:\Department\Business Services and Intelligence\Open\BOTS Automation_Tools\BOTSApplication\Files\DB       'Here is the location of the DB
+            ''ProjectNo is 11
+
+            ''ToolNo
+            ''
+
+            '*******************************************************************************************************************************
+
+
+
+
+
+
+
+
+
+
+
+
 
             'objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
 
@@ -95,12 +135,14 @@ Public Class MainForm
             OpenRxClaimSession()    'Open an RxClaim session/window
             Initialize_RxClaim_Screen()
 
-
             Dim iFileCnt As Integer = 0
 
+            Dim dStartDate As Date
 
             For Each objFile In objFolder.Files
                 If objFso.GetExtensionName(objFile.Path) = "xls" Or objFso.GetExtensionName(objFile.Path) = "xlsx" Then
+                    dStartDate = Now
+
                     iFileCnt = iFileCnt + 1
 
                     objExcel = CreateObject("Excel.Application")
@@ -112,6 +154,8 @@ Public Class MainForm
                     objExcel.Visible = True     '--only do this if you want to see the progress
 
                     'Now that we have our spreadsheet...lets get moving.
+
+                    bStopApp = False    'default to false
 
                     'This Do-While loop will walk us thru row by row in the spreadsheet we are using until there are no more records
                     Do While bStopApp = False
@@ -149,8 +193,6 @@ Public Class MainForm
                     ObjRange.EntireColumn.Autofit()
                     '**************************************************
 
-
-
                     'Save Spreadsheet
                     Dim var_TimeStamp As String
                     var_TimeStamp = Replace(Now, "/", "-")
@@ -175,8 +217,13 @@ Public Class MainForm
                     '** It does NOT seem to be actually closing the Excel instances (when looking from the task manager)
                     'Now that I am saving the spreadsheet and once I close the vb app...then it clears the Excel instances.
 
-                    '*********************************************************************************************************
+                    'Track Usage***************************************************************************************
+                    Dim appFun As New classlibrary.AppFunctions        'this is a class within the Class Library DLL
 
+                    appFun.TrackUse(3, usrNm, dStartDate, Now, objWorksheet1Count - 1)      '3 is the ProjNo for this Project
+                    '* End of Track Usage *****************************************************************************
+
+                    '*********************************************************************************************************
                 End If
             Next
 
@@ -184,14 +231,27 @@ Public Class MainForm
             objMgr2.StopConnection(ObjSessionHandle)
             ''***************************************************************************
 
-            lblStatus.Text = iFileCnt & " Files were processed."
-            btnStart.Enabled = True
-            Me.Cursor = Cursors.Arrow
+            If iFileCnt = 1 Then
+                lblStatus.Text = iFileCnt & " file was processed."
+            Else
+                lblStatus.Text = iFileCnt & " files were processed."
+            End If
 
         Catch ex As Exception
             bStopApp = True
-            MsgBox("Experienced an exception on btnStart_Click():  " & ex.ToString)
+            'MsgBox("Experienced an exception on btnStart_Click():  " & ex.ToString)
+
+            'To get the line number:   
+            Dim st As New StackTrace(True)
+            st = New StackTrace(ex, True)
+            MsgBox("Error Line: " & st.GetFrame(0).GetFileLineNumber().ToString & vbCrLf & _
+               "Experienced an exception on btnStart_Click():   " & vbCrLf & ex.Message, vbCritical)
+
+            lblStatus.Text = "Error was found...Did NOT complete"
         End Try
+
+        btnStart.Enabled = True
+        Me.Cursor = Cursors.Arrow
     End Sub
 
     Public Sub Initialize_RxClaim_Screen()
@@ -269,7 +329,7 @@ Public Class MainForm
 
                 If Len(sPreFillDate) = 8 Then
                     '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
-                    sPostFillDate = Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 3, 2)
+                    sPostFillDate = Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 3, 2)
 
                     If IsDate(sPostFillDate) Then
                         SettingText(sPostFillDate, 13, 10)   'Text, row, col
@@ -403,11 +463,19 @@ Public Class MainForm
                         waitForMe()
 
                         'Type "Y" and then [Enter]
-                        TypeMe("Y")
+                        TypeMe("Y")                                             'RIGHT HERE IS WHERE WE ARE GETTING SENT TO THE DELINQUENT CLAIMS BY PHARMACY SCREEN
                         waitForMe()
                         objRx.SendKeys("[Enter]")
-
                         waitForMe()
+
+                        If IsThisRightScreenName("RCTCP014", 1, 2, 5000) Then       'example of overloading a method/function
+                            'press f12
+                            MoveMe("pf12", 1)
+                            waitForMe()
+                        End If
+
+                        IsRightScreenName("RCNCP056BD", 1, 2, 5000)
+
                         Exit For
                     End If
                 Next
@@ -490,7 +558,7 @@ Public Class MainForm
 
             If Len(sPreFillDate) = 8 Then
                 '*Spreadsheet will be in this format "yyyymmdd"...But needs to be in this format: "mmddyy"
-                sPostFillDate = Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 3, 2)
+                sPostFillDate = Mid(sPreFillDate, 5, 2) & "-" & Mid(sPreFillDate, 7, 2) & "-" & Mid(sPreFillDate, 3, 2)
 
                 If IsDate(sPostFillDate) Then
                     MoveMe2("eraseeof", 7, 11)
@@ -513,32 +581,38 @@ Public Class MainForm
         End Try
     End Sub
 
-    Public Sub OpenSpreadsheetTemplate()
-        Try
-            objExcel = CreateObject("Excel.Application")
+    'Public Sub OpenSpreadsheetTemplate()
+    '    Try
+    '        objExcel = CreateObject("Excel.Application")
 
-            objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
+    '        objExcelFilePath = "C:\Users\rlberg\Desktop\R75 Resubmit Application Template.xlsx"
 
-            'objExcelFilePath = "J:\shrproj\Benefit Operations\Paper Claims\Claims Processing\Eligibility Rejects Macro\Stage Two - Eligibility Rejects Output File.xlsx"
+    '        'objExcelFilePath = "J:\shrproj\Benefit Operations\Paper Claims\Claims Processing\Eligibility Rejects Macro\Stage Two - Eligibility Rejects Output File.xlsx"
 
-            If objExcelFilePath = Nothing Then
-                MsgBox("Sorry we couldn't find that spreadsheet")
-                Exit Sub
-            End If
+    '        If objExcelFilePath = Nothing Then
+    '            MsgBox("Sorry we couldn't find that spreadsheet")
+    '            Exit Sub
+    '        End If
 
-            'objExcel = CreateObject("Excel.Application")
-            objWorkbook1 = objExcel.Workbooks.Open(objExcelFilePath)
-            objWorksheet1 = objWorkbook1.Worksheets(1)
+    '        'objExcel = CreateObject("Excel.Application")
+    '        objWorkbook1 = objExcel.Workbooks.Open(objExcelFilePath)
+    '        objWorksheet1 = objWorkbook1.Worksheets(1)
 
-            objWorksheet1Count = objWorksheet1.Range("A1").CurrentRegion.Rows.Count()        'Claim Count
+    '        objWorksheet1Count = objWorksheet1.Range("A1").CurrentRegion.Rows.Count()        'Claim Count
 
-            objExcel.Visible = True     '--only do this if you want to see the progress
+    '        objExcel.Visible = True     '--only do this if you want to see the progress
 
-        Catch ex As Exception
-            bStopApp = True
-            MsgBox("Experienced an exception on OpenSpreadsheetTemplate():  " & ex.ToString)
-        End Try
-    End Sub
+    '    Catch ex As Exception
+    '        bStopApp = True
+    '        'MsgBox("Experienced an exception on OpenSpreadsheetTemplate():  " & ex.ToString)
+
+    '        'To get the line number:   
+    '        Dim st As New StackTrace(True)
+    '        st = New StackTrace(ex, True)
+    '        MsgBox("Error Line: " & st.GetFrame(0).GetFileLineNumber().ToString & vbCrLf & _
+    '           "Experienced an exception on OpenSpreadsheetTemplate():   " & vbCrLf & ex.Message, vbCritical)
+    '    End Try
+    'End Sub
 
     Public Sub OpenRxClaimSession()
         Try
@@ -565,7 +639,13 @@ Public Class MainForm
             waitForMe()
         Catch ex As Exception
             bStopApp = True
-            MsgBox("Experienced an exception on OpenRxClaimSession():  " & ex.ToString)
+            'MsgBox("Experienced an exception on OpenRxClaimSession():  " & ex.ToString)
+
+            'To get the line number:   
+            Dim st As New StackTrace(True)
+            st = New StackTrace(ex, True)
+            MsgBox("Error Line: " & st.GetFrame(0).GetFileLineNumber().ToString & vbCrLf & _
+               "Experienced an exception on OpenRxClaimSession():   " & vbCrLf & ex.Message, vbCritical)
         End Try
     End Sub
 
@@ -699,10 +779,15 @@ Public Class MainForm
         objRx.Wait(intHowLong)
     End Sub
 
-    Sub waitForMe()
+    Sub waitForMe_OLDWAY()
         objWait.WaitForAppAvailable()
         System.Threading.Thread.Sleep(10)
         objWait.WaitForInputReady()
+    End Sub
+
+    Sub waitForMe()
+        objWait.WaitForAppAvailable(iTimeOut)
+        objWait.WaitForInputReady(iTimeOut)
     End Sub
 
     Sub GetUsername()
@@ -727,6 +812,19 @@ Public Class MainForm
             MsgBox("Experienced an exception on IsRightScreenName():  " & ex.ToString)
         End Try
     End Sub
+
+    Public Function IsThisRightScreenName(scrName, row, col, mil) As Boolean
+        Try
+            If (objRx.WaitForString(scrName, row, col, mil, True)) Then    'This will wait up to the Milliseconds provided
+                Return True
+            Else
+                Return False
+            End If
+        Catch ex As Exception
+            MsgBox("Experienced an exception on IsRightScreenName() as boolean:  " & ex.ToString)
+            Return False
+        End Try
+    End Function
 
     Public Function ManageSessions()
         Dim intSessions, x, y As Integer
